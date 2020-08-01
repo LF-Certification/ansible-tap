@@ -93,10 +93,8 @@ class CallbackModule(CallbackBase):
         """
         Render a skipped test.
         """
-        description = cls._describe(result)
-        reason = result._result.get('skip_reason', result._result.get('skipped_reason', None))
-        directive = '# SKIP {}'.format(reason) if reason else '# SKIP'
-        return cls._tap(cls.OK, description, directive=directive)
+        description = cls._describe(result, skipped=True)
+        return cls._tap(cls.OK, description)
 
     @classmethod
     def not_ok(cls, result):
@@ -108,15 +106,21 @@ class CallbackModule(CallbackBase):
         return cls._tap(cls.NOT_OK, description, directive=directive)
 
     @staticmethod
-    def _describe(result):
+    def _describe(result, skipped=False):
         """
         Construct a test line description based on the name of the Ansible
         module and task name.
         """
         description = '{}'.format(result._task.action)
+
+        if skipped:
+            reason = result._result.get('skip_reason', result._result.get('skipped_reason', None))
+            directive = '# SKIP {}'.format(reason) if reason else '# SKIP'
+
         if result._task.name:
             description = '{}: {}'.format(description, result._task.name)
-        return description
+
+        return description if not skipped else '{} {}'.format(description, directive)
 
     @staticmethod
     def _tap(status, description, directive=None):
@@ -149,6 +153,9 @@ class CallbackModule(CallbackBase):
         self._display.display(self.ok(result))
 
     def v2_runner_on_skipped(self, result):
+        if is_diagnostic(result._task):
+            self._display.display('# {}'.format(self._describe(result, skipped=True)))
+            return
         self._display.display(self.skip(result))
         self.counter.update(TestResult.SKIPPED.value)
 
